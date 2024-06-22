@@ -3,10 +3,16 @@
 use std::error::Error;
 use {
     windows::core::PCWSTR,
-    windows::Win32::Foundation::HMODULE,
+    windows::Win32::Foundation::{
+        HMODULE,
+        FreeLibrary,
+    },
     windows::Win32::System::{
         LibraryLoader::LoadLibraryW,
-        SystemServices::IMAGE_DOS_HEADER,
+        SystemServices::{
+            IMAGE_DOS_HEADER,
+            IMAGE_DOS_SIGNATURE,
+        },
     },
 };
 
@@ -23,6 +29,15 @@ fn to_wstring(value: &str) -> PCWSTR {
     PCWSTR::from_raw(encoded.as_ptr())
 }
 
+fn release_hmodule(h_module: HMODULE) {
+    match unsafe { FreeLibrary(h_module) } {
+        Ok(_) => (),
+        Err(e) => {
+            println!("FreeLibrary failed: {}", e);
+        }
+    }
+}
+
 // Helper function to iterate through DLL EAT
 // Reference: https://www.ired.team/offensive-security/defense-evasion/windows-api-hashing-in-malware
 // Reference: https://github.com/LloydLabs/Windows-API-Hashing/blob/master/resolve.c
@@ -33,16 +48,16 @@ fn process_module_eat(module_name: &str) -> Result<(), Box<dyn Error>> {
     let module_name_w = to_wstring(module_name);
     let h_module: HMODULE = unsafe { LoadLibraryW(module_name_w)? };
     if h_module.is_invalid() {
-        Err(format!("Failed to load module {}", module_name))?
+        Err("LoadLibraryW returned invalid HMODULE.")?
     }
 
     // Save pointer to library base (HMODULE is DLL base address)
     let library_base_ptr: *const u8 = h_module.0 as *const u8;
 
-    // Read in DOS header struct
+    // Read in DOS header
     let dos_header_ptr: *const IMAGE_DOS_HEADER = library_base_ptr as *const IMAGE_DOS_HEADER;
 
-    // Debugging - check fields
+    // Debugging - display fields
     #[cfg(debug_assertions)]
     unsafe {
         println!("e_magic:    {:#06x}", (*dos_header_ptr).e_magic);
@@ -65,6 +80,12 @@ fn process_module_eat(module_name: &str) -> Result<(), Box<dyn Error>> {
         // Bypass error for unaligned reference to packed field
         let lfanew: i32 = (*dos_header_ptr).e_lfanew;
         println!("e_lfanew:   {:#010x}", lfanew);
+    }
+
+    // Verify DOS header
+    if unsafe { (*dos_header_ptr).e_magic != IMAGE_DOS_SIGNATURE } {
+        release_hmodule(h_module);
+        Err("Invalid DOS header - magic number mismatch.")?
     }
 
     Ok(())
