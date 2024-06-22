@@ -27,6 +27,8 @@ fn to_wstring(value: &str) -> PCWSTR {
 // Reference: https://www.ired.team/offensive-security/defense-evasion/windows-api-hashing-in-malware
 // Reference: https://github.com/LloydLabs/Windows-API-Hashing/blob/master/resolve.c
 fn process_module_eat(module_name: &str) -> Result<(), Box<dyn Error>> {
+    println!("Processing module: {}", module_name);
+
     // Get module handle
     let module_name_w = to_wstring(module_name);
     let h_module: HMODULE = unsafe { LoadLibraryW(module_name_w)? };
@@ -41,6 +43,7 @@ fn process_module_eat(module_name: &str) -> Result<(), Box<dyn Error>> {
     let dos_header_ptr: *const IMAGE_DOS_HEADER = library_base_ptr as *const IMAGE_DOS_HEADER;
 
     // Debugging - check fields
+    #[cfg(debug_assertions)]
     unsafe {
         println!("e_magic:    {:#06x}", (*dos_header_ptr).e_magic);
         println!("e_cblp:     {:#06x}", (*dos_header_ptr).e_cblp);
@@ -69,6 +72,5 @@ fn process_module_eat(module_name: &str) -> Result<(), Box<dyn Error>> {
 
 
 fn main() {
-    println!("Hello, world!");
     process_module_eat("kernel32.dll").unwrap();
 }
