@@ -12,8 +12,12 @@ use {
         SystemServices::{
             IMAGE_DOS_HEADER,
             IMAGE_DOS_SIGNATURE,
+            IMAGE_EXPORT_DIRECTORY,
+            IMAGE_NT_SIGNATURE,
         },
         Diagnostics::Debug::{
+            IMAGE_DIRECTORY_ENTRY_EXPORT,
+            IMAGE_FILE_DLL,
             IMAGE_FILE_HEADER,
             IMAGE_NT_HEADERS64,
             IMAGE_OPTIONAL_HEADER64,
@@ -121,6 +125,7 @@ fn process_module_eat(module_name: &str) -> Result<(), Box<dyn Error>> {
         println!("AddressOfEntryPoint:          {:#10x}", (*nt_headers_ptr).OptionalHeader.AddressOfEntryPoint);
         println!("BaseOfCode:                   {:#10x}", (*nt_headers_ptr).OptionalHeader.BaseOfCode);
 
+        // Note - this won't necessarily match what's in PE bear or other analysis tools
         let image_base: u64 = (*nt_headers_ptr).OptionalHeader.ImageBase;
         println!("ImageBase:                    {:#18x}", image_base);
 
@@ -138,9 +143,6 @@ fn process_module_eat(module_name: &str) -> Result<(), Box<dyn Error>> {
         println!("CheckSum:                     {:#10x}", (*nt_headers_ptr).OptionalHeader.CheckSum);
         println!("Subsystem:                    {:#06x}", (*nt_headers_ptr).OptionalHeader.Subsystem.0);
         println!("DllCharacteristics:           {:#06x}", (*nt_headers_ptr).OptionalHeader.DllCharacteristics.0);
-        
-        
-        
 
         // Bypass errors for unaligned reference to packed field
         let size_of_stack_reserve = (*nt_headers_ptr).OptionalHeader.SizeOfStackReserve;
@@ -163,6 +165,45 @@ fn process_module_eat(module_name: &str) -> Result<(), Box<dyn Error>> {
             println!("Data directory {} Size:           {:#10x}", index, image_data_directory.Size);
             index = index + 1;
         }
+    }
+
+    // Verify NT headers
+    if unsafe { (*nt_headers_ptr).Signature != IMAGE_NT_SIGNATURE } {
+        release_hmodule(h_module);
+        Err("Invalid NT headers - IMAGE_NT_SIGNATURE mismatch.")?
+    }
+
+    // Verify module is a DLL
+    if unsafe { (*nt_headers_ptr).FileHeader.Characteristics & IMAGE_FILE_DLL != IMAGE_FILE_DLL } {
+        release_hmodule(h_module);
+        Err("Module is not a DLL.")?
+    }
+
+    // Check that module has exports
+    let export_dir_rva: u32 = unsafe { (*nt_headers_ptr).OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT.0 as usize].VirtualAddress };
+    let export_dir_size: u32 = unsafe { (*nt_headers_ptr).OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT.0 as usize].Size };
+    if export_dir_rva == 0 {
+        release_hmodule(h_module);
+        Err("Could not find module's export directory: Null RVA.")?
+    }
+    if export_dir_size == 0 {
+        release_hmodule(h_module);
+        Err("Could not find module's export directory: export size of 0.")?
+    }
+
+    // Access export directory
+    let export_dir_addr_val: isize = library_base_addr_val + (export_dir_rva as isize);
+    let export_dir_ptr: *const IMAGE_EXPORT_DIRECTORY = export_dir_addr_val as *const IMAGE_EXPORT_DIRECTORY;
+
+    #[cfg(debug_assertions)]
+    unsafe {
+        println!("Export directory info:");
+        println!("Base:                  {:#10x}", (*export_dir_ptr).Base);
+        println!("NumberOfFunctions:     {:#10x}", (*export_dir_ptr).NumberOfFunctions);
+        println!("NumberOfNames:         {:#10x}", (*export_dir_ptr).NumberOfNames);
+        println!("AddressOfFunctions:    {:#10x}", (*export_dir_ptr).AddressOfFunctions);
+        println!("AddressOfNames:        {:#10x}", (*export_dir_ptr).AddressOfNames);
+        println!("AddressOfNameOrdinals: {:#10x}", (*export_dir_ptr).AddressOfNameOrdinals);
     }
 
     Ok(())
