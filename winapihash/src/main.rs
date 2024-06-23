@@ -1,5 +1,7 @@
 #[cfg(target_os = "windows")]
 
+mod djb2;
+
 use std::error::Error;
 use std::ffi::CStr;
 use {
@@ -39,8 +41,8 @@ fn to_wstring(value: &str) -> PCWSTR {
     PCWSTR::from_raw(encoded.as_ptr())
 }
 
-fn release_hmodule(h_module: HMODULE) {
-    match unsafe { FreeLibrary(h_module) } {
+fn release_hmodule(h_module: &HMODULE) {
+    match unsafe { FreeLibrary(*h_module) } {
         Ok(_) => (),
         Err(e) => {
             println!("FreeLibrary failed: {}", e);
@@ -96,7 +98,7 @@ fn process_module_eat(module_name: &str) -> Result<(), Box<dyn Error>> {
 
     // Verify DOS header
     if unsafe { (*dos_header_ptr).e_magic != IMAGE_DOS_SIGNATURE } {
-        release_hmodule(h_module);
+        release_hmodule(&h_module);
         Err("Invalid DOS header - magic number mismatch.")?
     }
 
@@ -170,13 +172,13 @@ fn process_module_eat(module_name: &str) -> Result<(), Box<dyn Error>> {
 
     // Verify NT headers
     if unsafe { (*nt_headers_ptr).Signature != IMAGE_NT_SIGNATURE } {
-        release_hmodule(h_module);
+        release_hmodule(&h_module);
         Err("Invalid NT headers - IMAGE_NT_SIGNATURE mismatch.")?
     }
 
     // Verify module is a DLL
     if unsafe { (*nt_headers_ptr).FileHeader.Characteristics & IMAGE_FILE_DLL != IMAGE_FILE_DLL } {
-        release_hmodule(h_module);
+        release_hmodule(&h_module);
         Err("Module is not a DLL.")?
     }
 
@@ -184,11 +186,11 @@ fn process_module_eat(module_name: &str) -> Result<(), Box<dyn Error>> {
     let export_dir_rva: u32 = unsafe { (*nt_headers_ptr).OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT.0 as usize].VirtualAddress };
     let export_dir_size: u32 = unsafe { (*nt_headers_ptr).OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT.0 as usize].Size };
     if export_dir_rva == 0 {
-        release_hmodule(h_module);
+        release_hmodule(&h_module);
         Err("Could not find module's export directory: Null RVA.")?
     }
     if export_dir_size == 0 {
-        release_hmodule(h_module);
+        release_hmodule(&h_module);
         Err("Could not find module's export directory: export size of 0.")?
     }
 
@@ -222,16 +224,12 @@ fn process_module_eat(module_name: &str) -> Result<(), Box<dyn Error>> {
         let func_name_rva: u32 = unsafe { *(exported_names_list_ptr.add(i as usize)) };
         let func_name_addr_val: isize = library_base_addr_val + func_name_rva as isize;
         let func_name_ptr: *const i8 = func_name_addr_val as *const i8;
-        #[cfg(debug_assertions)] {
-            println!("Function name RVA:     {:#18x}", func_name_rva);
-        }
-
         let func_name_cstr = unsafe { CStr::from_ptr(func_name_ptr) };
 
         #[cfg(debug_assertions)]
         match func_name_cstr.to_str() {
             Ok(s) => {
-                println!("Found exported function {}", s)
+                println!("Found exported function {} with RVA {:#18x}", s, func_name_rva)
             },
             Err(e) => {
                 println!("[ERROR] Failed to convert function name C-string to rust string: {}", e);
