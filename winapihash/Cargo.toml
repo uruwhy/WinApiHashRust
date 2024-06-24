@@ -4,6 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+djb2 = { path = "djb2" }
+djb2macro = { path = "djb2macro" }
 
 # For Windows API
 [target.'cfg(windows)'.dependencies.windows]

@@ -1,0 +1,10 @@
+[package]
+name = "djb2"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "djb2"
+path = "src/lib.rs"
+
+[dependencies]

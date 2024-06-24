@@ -1,7 +1,5 @@
 #[cfg(target_os = "windows")]
 
-mod djb2;
-
 use std::error::Error;
 use std::ffi::CStr;
 use {
@@ -235,6 +233,8 @@ fn process_module_eat(module_name: &str) -> Result<(), Box<dyn Error>> {
                 println!("[ERROR] Failed to convert function name C-string to rust string: {}", e);
             }
         }
+
+        // Check DJB2 hash of function name
     }
 
     Ok(())
