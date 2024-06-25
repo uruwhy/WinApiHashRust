@@ -1,8 +1,9 @@
 #[cfg(target_os = "windows")]
 
-use std::collections::HashSet;
+use std::collections::{HashSet, HashMap};
 use std::error::Error;
 use std::ffi::CStr;
+use std::sync::Mutex;
 use {
     windows::core::PCWSTR,
     windows::Win32::Foundation::{
@@ -38,6 +39,8 @@ lazy_static::lazy_static! {
         djb2!("Process32FirstW"),
         djb2!("CreateToolhelp32Snapshot"),
     ]);
+
+    static ref HASHED_API_ADDRESSES: Mutex<HashMap<u32, u64>> = Mutex::new(HashMap::new());
 }
 
 #[cfg(debug_assertions)]
@@ -61,6 +64,19 @@ fn release_hmodule(h_module: &HMODULE) {
         Err(e) => {
             println!("FreeLibrary failed: {}", e);
         }
+    }
+}
+
+// Checks if we already resolved the API with the corresponding hash
+fn discovered_api(hash: &u32) -> Result<bool, Box<dyn Error>> {
+    Ok(HASHED_API_ADDRESSES.lock()?.contains_key(hash))
+}
+
+// Gets the address of the resolved API
+fn get_hashed_api_addr(hash: &u32) -> Result<u64, Box<dyn Error>> {
+    match HASHED_API_ADDRESSES.lock()?.get(hash) {
+        None => Err(format!("API with hash {} was not resolved. Could not return address.", hash))?,
+        Some(a) => Ok(*a)
     }
 }
 
@@ -225,11 +241,14 @@ fn process_module_eat(module_name: &str) -> Result<(), Box<dyn Error>> {
 
     // Get the exported functions, exported names, and name ordinals.
     let exported_func_list_addr_val: isize = library_base_addr_val + unsafe { (*export_dir_ptr).AddressOfFunctions as isize };
+    let exported_func_list_ptr: *const u32 = exported_func_list_addr_val as *const u32;
     let exported_names_list_addr_val: isize = library_base_addr_val + unsafe { (*export_dir_ptr).AddressOfNames as isize };
     let exported_names_list_ptr: *const u32 = exported_names_list_addr_val as *const u32;
     let exported_ordinals_list_addr_val: isize = library_base_addr_val + unsafe { (*export_dir_ptr).AddressOfNameOrdinals as isize };
+    let exported_ordinals_list_ptr: *const u16 = exported_ordinals_list_addr_val as *const u16;
 
-    // Iterate through exported function names. Note that we use NumberOfNames since we are only looking at functions
+    // Iterate through exported function names.
+    // Note that we use NumberOfNames since we are only looking at functions
     // exported by name, not ordinal (NumberOfFunctions includes both)
     let num_names = unsafe {(*export_dir_ptr).NumberOfNames};
     println!("Traversing exported function names.");
@@ -240,17 +259,30 @@ fn process_module_eat(module_name: &str) -> Result<(), Box<dyn Error>> {
         let func_name_ptr: *const i8 = func_name_addr_val as *const i8;
         let func_name_cstr = unsafe { CStr::from_ptr(func_name_ptr) };
 
-        #[cfg(debug_assertions)]
-        match func_name_cstr.to_str() {
-            Ok(s) => {
-                println!("Found exported function {} with RVA {:#18x}", s, func_name_rva)
-            },
+        let func_name_str = match func_name_cstr.to_str() {
+            Ok(s) => s,
             Err(e) => {
-                println!("[ERROR] Failed to convert function name C-string to rust string: {}", e);
+                println!("[ERROR] Failed to convert API name C-string to rust string: {}", e);
+                ""
             }
-        }
+        };
 
-        // Check DJB2 hash of function name
+        // Check DJB2 hash of function name - if the API is one that we want, grab the address
+        let hash: u32 = djb2::djb2_hash(func_name_cstr.to_bytes());
+        if TARGET_HASHES.contains(&hash) {
+            // Check if we already resolved this API
+            if discovered_api(&hash)? {
+                println!("Already resolved API {} with hash {:#18x}", func_name_str, hash);
+                continue;
+            }
+
+            // Use the ordinal to get the API address
+            let ordinal: u16 = unsafe { *(exported_ordinals_list_ptr.add(i as usize)) };
+            let func_addr_rva: u32 = unsafe { *(exported_func_list_ptr.add(ordinal as usize)) };
+
+            #[cfg(debug_assertions)]
+            println!("Found target API {} with hash {:#18x} and RVA {:#18x}", func_name_str, hash, func_addr_rva);
+        }
     }
 
     Ok(())
