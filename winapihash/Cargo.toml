@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 djb2 = { path = "djb2" }
 djb2macro = { path = "djb2macro" }
+lazy_static = "1.5.0"
 
 # For Windows API
 [target.'cfg(windows)'.dependencies.windows]

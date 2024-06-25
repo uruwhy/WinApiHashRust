@@ -1,5 +1,6 @@
 #[cfg(target_os = "windows")]
 
+use std::collections::HashSet;
 use std::error::Error;
 use std::ffi::CStr;
 use {
@@ -25,11 +26,26 @@ use {
         },
     },
 };
-
+use djb2macro::djb2;
 
 // Define return type for GetProcAddress
 // Ref: https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/Foundation/type.FARPROC.html
 pub type FARPROC = unsafe extern "system" fn() -> isize;
+
+// APIs that we want to hash
+lazy_static::lazy_static! {
+    static ref TARGET_HASHES: HashSet<u32> = HashSet::from([
+        djb2!("Process32FirstW"),
+        djb2!("CreateToolhelp32Snapshot"),
+    ]);
+}
+
+#[cfg(debug_assertions)]
+fn print_target_hashes() {
+    for hash in TARGET_HASHES.clone().into_iter() {
+        println!("{}", hash);
+    }
+}
 
 // Convert rust string to wide Windows string
 // Reference: https://github.com/microsoft/windows-rs/issues/973
@@ -242,5 +258,10 @@ fn process_module_eat(module_name: &str) -> Result<(), Box<dyn Error>> {
 
 
 fn main() {
-    process_module_eat("kernel32.dll").unwrap();
+    #[cfg(debug_assertions)] {
+        println!("Printing target hashes:");
+        print_target_hashes();
+    }
+
+    //process_module_eat("kernel32.dll").unwrap();
 }
