@@ -10,7 +10,6 @@ use syn::{
 // Calculate DJB2 hash of string at compile time
 #[proc_macro]
 pub fn djb2(input: TokenStream) -> TokenStream {
-    println!("Invoked djb2 macro");
     let parsed = parse_macro_input!(input as LitStr);
     let string_to_hash = parsed.value();
     let hash = djb2_hash(string_to_hash.as_bytes());

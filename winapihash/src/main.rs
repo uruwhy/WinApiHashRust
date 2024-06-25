@@ -263,5 +263,5 @@ fn main() {
         print_target_hashes();
     }
 
-    //process_module_eat("kernel32.dll").unwrap();
+    process_module_eat("kernel32.dll").unwrap();
 }
