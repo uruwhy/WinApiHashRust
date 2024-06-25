@@ -282,6 +282,7 @@ fn process_module_eat(module_name: &str) -> Result<(), Box<dyn Error>> {
 
             #[cfg(debug_assertions)]
             println!("Found target API {} with hash {:#18x} and RVA {:#18x}", func_name_str, hash, func_addr_rva);
+
         }
     }
 
