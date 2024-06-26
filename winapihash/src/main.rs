@@ -2,7 +2,7 @@
 
 use std::collections::{HashSet, HashMap};
 use std::error::Error;
-use std::ffi::CStr;
+use std::ffi::{CStr, c_void};
 use std::sync::Mutex;
 use {
     windows::core::PCWSTR,
@@ -24,16 +24,27 @@ use {
 };
 use djb2macro::djb2;
 
-// Macro to get pointer after adding RVA to base address
+// HWND -> HANDLE -> void *
+// LPCWSTR -> *const u16
+// UINT -> u32
+type FnMessageBoxW = fn(*mut c_void, *const u16, *const u16, u32) -> i32;
+
+const MB_OK: u32 = 0x00000000;
+
+// Macro to get pointer after adding RVA to base address.
 macro_rules! ptr_from_rva {
     ($rva:expr, $base_addr:expr, $t:ty) => {
         ($base_addr + ($rva as isize)) as *const $t
     };
 }
 
-// Define return type for GetProcAddress
-// Ref: https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/Foundation/type.FARPROC.html
-pub type FARPROC = unsafe extern "system" fn() -> isize;
+// Macro to convert address to function pointer.
+// Reference: https://stackoverflow.com/a/46134764, https://doc.rust-lang.org/stable/std/mem/fn.transmute.html
+macro_rules! addr_to_func_ptr {
+    ($addr:expr, $t:ty) => {
+        unsafe { ::std::mem::transmute::<*const (), $t>($addr as *const ()) }
+    };
+}
 
 // APIs that we want to hash
 lazy_static::lazy_static! {
@@ -396,7 +407,10 @@ fn main() {
         print_target_hashes();
     }
 
-    // process_module_eat("kernel32.dll").unwrap();
-    let message_box_w_ptr = resolve_api(djb2!("MessageBoxW"), "User32.dll").unwrap() as *const ();
-    println!("MessageBoxW ")
+    // Proof of concept. Get function pointer for MessageBoxW
+    let message_box_w_ptr: FnMessageBoxW = addr_to_func_ptr!(resolve_api(djb2!("MessageBoxW"), "User32.dll").unwrap(), FnMessageBoxW);
+
+    // Call MessageBoxW
+    let ret: i32 = message_box_w_ptr(0 as *mut c_void, to_wstring("Test msg").as_ptr(), to_wstring("Test title").as_ptr(), MB_OK);
+    println!("Return value: {}", ret);
 }
