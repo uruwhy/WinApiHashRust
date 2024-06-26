@@ -6,10 +6,7 @@ use std::ffi::CStr;
 use std::sync::Mutex;
 use {
     windows::core::PCWSTR,
-    windows::Win32::Foundation::{
-        HMODULE,
-        FreeLibrary,
-    },
+    windows::Win32::Foundation::{HMODULE, FreeLibrary},
     windows::Win32::System::{
         LibraryLoader::LoadLibraryW,
         SystemServices::{
@@ -21,9 +18,7 @@ use {
         Diagnostics::Debug::{
             IMAGE_DIRECTORY_ENTRY_EXPORT,
             IMAGE_FILE_DLL,
-            IMAGE_FILE_HEADER,
             IMAGE_NT_HEADERS64,
-            IMAGE_OPTIONAL_HEADER64,
         },
     },
 };
@@ -124,15 +119,14 @@ fn process_forwarded_export(forwarder: &str) -> Result<(), Box<dyn Error>> {
         println!("Adding forwarding dest API {} to target set with hash {}", dest_api_name, dest_api_hash);
     }
 
-    println!("Processing forwarder module: {}", dest_module_name);
     let full_dest_module_name = dest_module_name.to_owned() + ".dll";
     match process_module_eat(&full_dest_module_name) {
         Ok(_) => {
-            println!("Successfully processed forwarder module {}", dest_module_name);
+            println!("Successfully processed forwarder module {}", full_dest_module_name);
             Ok(())
         },
         Err(e) => {
-            Err(format!("Failed to process forwarder module {}: {}", dest_module_name, e))?
+            Err(format!("Failed to process forwarder module {}: {}", full_dest_module_name, e))?
         }
     }
 }
@@ -201,58 +195,58 @@ fn process_module_eat(module_name: &str) -> Result<(), Box<dyn Error>> {
         println!("Machine:              {:#06x}", (*nt_headers_ptr).FileHeader.Machine.0);
         println!("NumberOfSections:     {:#06x}", (*nt_headers_ptr).FileHeader.NumberOfSections);
         println!("TimeDateStamp:        {:#06x}", (*nt_headers_ptr).FileHeader.TimeDateStamp);
-        println!("PointerToSymbolTable: {:#10x}", (*nt_headers_ptr).FileHeader.PointerToSymbolTable);
-        println!("NumberOfSymbols:      {:#10x}", (*nt_headers_ptr).FileHeader.NumberOfSymbols);
+        println!("PointerToSymbolTable: {:#010x}", (*nt_headers_ptr).FileHeader.PointerToSymbolTable);
+        println!("NumberOfSymbols:      {:#010x}", (*nt_headers_ptr).FileHeader.NumberOfSymbols);
         println!("SizeOfOptionalHeader: {:#06x}", (*nt_headers_ptr).FileHeader.SizeOfOptionalHeader);
         println!("Characteristics:      {:#06x}", (*nt_headers_ptr).FileHeader.Characteristics.0);
         println!("NT headers OptionalHeader fields");
         println!("Magic:                        {:#06x}", (*nt_headers_ptr).OptionalHeader.Magic.0);
         println!("MajorLinkerVersion:           {:#06x}", (*nt_headers_ptr).OptionalHeader.MajorLinkerVersion);
         println!("MinorLinkerVersion:           {:#06x}", (*nt_headers_ptr).OptionalHeader.MinorLinkerVersion);
-        println!("SizeOfCode:                   {:#10x}", (*nt_headers_ptr).OptionalHeader.SizeOfCode);
-        println!("SizeOfInitializedData:        {:#10x}", (*nt_headers_ptr).OptionalHeader.SizeOfInitializedData);
-        println!("SizeOfUninitializedData:      {:#10x}", (*nt_headers_ptr).OptionalHeader.SizeOfUninitializedData);
-        println!("AddressOfEntryPoint:          {:#10x}", (*nt_headers_ptr).OptionalHeader.AddressOfEntryPoint);
-        println!("BaseOfCode:                   {:#10x}", (*nt_headers_ptr).OptionalHeader.BaseOfCode);
+        println!("SizeOfCode:                   {:#010x}", (*nt_headers_ptr).OptionalHeader.SizeOfCode);
+        println!("SizeOfInitializedData:        {:#010x}", (*nt_headers_ptr).OptionalHeader.SizeOfInitializedData);
+        println!("SizeOfUninitializedData:      {:#010x}", (*nt_headers_ptr).OptionalHeader.SizeOfUninitializedData);
+        println!("AddressOfEntryPoint:          {:#010x}", (*nt_headers_ptr).OptionalHeader.AddressOfEntryPoint);
+        println!("BaseOfCode:                   {:#010x}", (*nt_headers_ptr).OptionalHeader.BaseOfCode);
 
         // Note - this won't necessarily match what's in PE bear or other analysis tools
         let image_base: u64 = (*nt_headers_ptr).OptionalHeader.ImageBase;
-        println!("ImageBase:                    {:#18x}", image_base);
+        println!("ImageBase:                    {:#018x}", image_base);
 
-        println!("SectionAlignment:             {:#10x}", (*nt_headers_ptr).OptionalHeader.SectionAlignment);
-        println!("FileAlignment:                {:#10x}", (*nt_headers_ptr).OptionalHeader.FileAlignment);
+        println!("SectionAlignment:             {:#010x}", (*nt_headers_ptr).OptionalHeader.SectionAlignment);
+        println!("FileAlignment:                {:#010x}", (*nt_headers_ptr).OptionalHeader.FileAlignment);
         println!("MajorOperatingSystemVersion:  {:#06x}", (*nt_headers_ptr).OptionalHeader.MajorOperatingSystemVersion);
         println!("MinorOperatingSystemVersion:  {:#06x}", (*nt_headers_ptr).OptionalHeader.MinorOperatingSystemVersion);
         println!("MajorImageVersion:            {:#06x}", (*nt_headers_ptr).OptionalHeader.MajorImageVersion);
         println!("MinorImageVersion:            {:#06x}", (*nt_headers_ptr).OptionalHeader.MinorImageVersion);
         println!("MajorSubsystemVersion:        {:#06x}", (*nt_headers_ptr).OptionalHeader.MajorSubsystemVersion);
         println!("MinorSubsystemVersion:        {:#06x}", (*nt_headers_ptr).OptionalHeader.MinorSubsystemVersion);
-        println!("Win32VersionValue:            {:#10x}", (*nt_headers_ptr).OptionalHeader.Win32VersionValue);
-        println!("SizeOfImage:                  {:#10x}", (*nt_headers_ptr).OptionalHeader.SizeOfImage);
-        println!("SizeOfHeaders:                {:#10x}", (*nt_headers_ptr).OptionalHeader.SizeOfHeaders);
-        println!("CheckSum:                     {:#10x}", (*nt_headers_ptr).OptionalHeader.CheckSum);
+        println!("Win32VersionValue:            {:#010x}", (*nt_headers_ptr).OptionalHeader.Win32VersionValue);
+        println!("SizeOfImage:                  {:#010x}", (*nt_headers_ptr).OptionalHeader.SizeOfImage);
+        println!("SizeOfHeaders:                {:#010x}", (*nt_headers_ptr).OptionalHeader.SizeOfHeaders);
+        println!("CheckSum:                     {:#010x}", (*nt_headers_ptr).OptionalHeader.CheckSum);
         println!("Subsystem:                    {:#06x}", (*nt_headers_ptr).OptionalHeader.Subsystem.0);
         println!("DllCharacteristics:           {:#06x}", (*nt_headers_ptr).OptionalHeader.DllCharacteristics.0);
 
         // Bypass errors for unaligned reference to packed field
         let size_of_stack_reserve = (*nt_headers_ptr).OptionalHeader.SizeOfStackReserve;
-        println!("SizeOfStackReserve:           {:#18x}", size_of_stack_reserve);
+        println!("SizeOfStackReserve:           {:#018x}", size_of_stack_reserve);
 
         let size_of_stack_commit = (*nt_headers_ptr).OptionalHeader.SizeOfStackCommit;
-        println!("SizeOfStackCommit:            {:#18x}", size_of_stack_commit);
+        println!("SizeOfStackCommit:            {:#018x}", size_of_stack_commit);
 
         let size_of_heap_reserve = (*nt_headers_ptr).OptionalHeader.SizeOfHeapReserve;
-        println!("SizeOfHeapReserve:            {:#18x}", size_of_heap_reserve);
+        println!("SizeOfHeapReserve:            {:#018x}", size_of_heap_reserve);
 
         let size_of_heap_commit = (*nt_headers_ptr).OptionalHeader.SizeOfHeapCommit;
-        println!("SizeOfHeapCommit:             {:#18x}", size_of_heap_commit);
+        println!("SizeOfHeapCommit:             {:#018x}", size_of_heap_commit);
 
-        println!("LoaderFlags:                  {:#10x}", (*nt_headers_ptr).OptionalHeader.LoaderFlags);
-        println!("NumberOfRvaAndSizes:          {:#10x}", (*nt_headers_ptr).OptionalHeader.NumberOfRvaAndSizes);
+        println!("LoaderFlags:                  {:#010x}", (*nt_headers_ptr).OptionalHeader.LoaderFlags);
+        println!("NumberOfRvaAndSizes:          {:#010x}", (*nt_headers_ptr).OptionalHeader.NumberOfRvaAndSizes);
         let mut index = 0;
         for image_data_directory in (*nt_headers_ptr).OptionalHeader.DataDirectory.iter() {
-            println!("Data directory {} VirtualAddress: {:#10x}", index, image_data_directory.VirtualAddress);
-            println!("Data directory {} Size:           {:#10x}", index, image_data_directory.Size);
+            println!("Data directory {:02} VirtualAddress: {:#010x}", index, image_data_directory.VirtualAddress);
+            println!("Data directory {:02} Size:           {:#010x}", index, image_data_directory.Size);
             index = index + 1;
         }
     }
@@ -288,12 +282,12 @@ fn process_module_eat(module_name: &str) -> Result<(), Box<dyn Error>> {
     #[cfg(debug_assertions)]
     unsafe {
         println!("Export directory info:");
-        println!("Base:                  {:#10x}", (*export_dir_ptr).Base);
-        println!("NumberOfFunctions:     {:#10x}", (*export_dir_ptr).NumberOfFunctions);
-        println!("NumberOfNames:         {:#10x}", (*export_dir_ptr).NumberOfNames);
-        println!("AddressOfFunctions:    {:#10x}", (*export_dir_ptr).AddressOfFunctions);
-        println!("AddressOfNames:        {:#10x}", (*export_dir_ptr).AddressOfNames);
-        println!("AddressOfNameOrdinals: {:#10x}", (*export_dir_ptr).AddressOfNameOrdinals);
+        println!("Base:                  {:#010x}", (*export_dir_ptr).Base);
+        println!("NumberOfFunctions:     {:#010x}", (*export_dir_ptr).NumberOfFunctions);
+        println!("NumberOfNames:         {:#010x}", (*export_dir_ptr).NumberOfNames);
+        println!("AddressOfFunctions:    {:#010x}", (*export_dir_ptr).AddressOfFunctions);
+        println!("AddressOfNames:        {:#010x}", (*export_dir_ptr).AddressOfNames);
+        println!("AddressOfNameOrdinals: {:#010x}", (*export_dir_ptr).AddressOfNameOrdinals);
     }
 
     // Get the exported functions, exported names, and name ordinals.
@@ -328,7 +322,7 @@ fn process_module_eat(module_name: &str) -> Result<(), Box<dyn Error>> {
         if is_target_api(&hash)? {
             // Check if we already resolved this API
             if discovered_api(&hash)? {
-                println!("Already resolved API {} with hash {:#18x}", func_name_str, hash);
+                println!("Already resolved API {} with hash {:#010x}", func_name_str, hash);
                 continue;
             }
 
@@ -339,7 +333,7 @@ fn process_module_eat(module_name: &str) -> Result<(), Box<dyn Error>> {
             let func_ptr: *const i8 = func_addr_val as *const i8;
 
             #[cfg(debug_assertions)]
-            println!("Found target API {} with hash {:#18x} and RVA {:#18x}", func_name_str, hash, func_rva);
+            println!("Found target API {} with hash {:#010x} and RVA 0x{:x}", func_name_str, hash, func_rva);
 
             // Check if the address is a forwarder, meaning it's within the export directory
             if func_rva >= export_dir_rva && func_rva < export_dir_rva + export_dir_size {
@@ -350,12 +344,15 @@ fn process_module_eat(module_name: &str) -> Result<(), Box<dyn Error>> {
                         Err(format!("[ERROR] Failed to convert API forwarder C-string to rust string: {}", e))?
                     }
                 };
-                println!("Found target API {} with hash {:#18x} and forwarder entry {}", func_name_str, hash, forwarder_str);
+                println!("Found target API {} with hash {:#010x} and forwarder entry {}", func_name_str, hash, forwarder_str);
 
                 // Process the forwarded export
-                process_forwarded_export(&forwarder_str)?
+                process_forwarded_export(&forwarder_str)?;
             } else {
-                // TODO - get address and save it
+                // Save the address
+                let func_addr_to_save: u64 = func_addr_val as u64;
+                add_discovered_api(&hash, &func_addr_to_save)?;
+                println!("Resolved target API {} with hash {:#010x} and address 0x{:x}", func_name_str, hash, func_addr_to_save);
             }
         }
     }
