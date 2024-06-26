@@ -35,17 +35,18 @@ pub type FARPROC = unsafe extern "system" fn() -> isize;
 
 // APIs that we want to hash
 lazy_static::lazy_static! {
-    static ref TARGET_HASHES: HashSet<u32> = HashSet::from([
+    static ref TARGET_HASHES: Mutex<HashSet<u32>> = Mutex::new(HashSet::from([
         djb2!("Process32FirstW"),
         djb2!("CreateToolhelp32Snapshot"),
-    ]);
+        djb2!("HeapAlloc"),
+    ]));
 
     static ref HASHED_API_ADDRESSES: Mutex<HashMap<u32, u64>> = Mutex::new(HashMap::new());
 }
 
 #[cfg(debug_assertions)]
 fn print_target_hashes() {
-    for hash in TARGET_HASHES.clone().into_iter() {
+    for hash in TARGET_HASHES.lock().unwrap().clone().into_iter() {
         println!("{}", hash);
     }
 }
@@ -72,11 +73,67 @@ fn discovered_api(hash: &u32) -> Result<bool, Box<dyn Error>> {
     Ok(HASHED_API_ADDRESSES.lock()?.contains_key(hash))
 }
 
+// Checks if the given API hash belongs to an API that we are hashing
+fn is_target_api(hash: &u32) -> Result<bool, Box<dyn Error>> {
+    Ok(TARGET_HASHES.lock()?.contains(hash))
+}
+
+// Adds a new API as a target (e.g. when processing forwarded exports and the forwarded API name is different)
+fn add_target_api(hash: &u32) -> Result<(), Box<dyn Error>> {
+    TARGET_HASHES.lock()?.insert(*hash);
+    Ok(())
+}
+
+// Marks the given API hash as resolved
+fn add_discovered_api(hash: &u32, addr: &u64) -> Result<(), Box<dyn Error>> {
+    HASHED_API_ADDRESSES.lock()?.insert(*hash, *addr);
+    Ok(())
+}
+
 // Gets the address of the resolved API
 fn get_hashed_api_addr(hash: &u32) -> Result<u64, Box<dyn Error>> {
     match HASHED_API_ADDRESSES.lock()?.get(hash) {
         None => Err(format!("API with hash {} was not resolved. Could not return address.", hash))?,
         Some(a) => Ok(*a)
+    }
+}
+
+// Process forwarded export. Will check if the forwarded export API hash is not yet part of the target set.
+// If it is not, the function will get the forwarded API hash and add it to the target hash list before
+// processing the forwarded module EAT.
+fn process_forwarded_export(forwarder: &str) -> Result<(), Box<dyn Error>> {
+    println!("Processing forwarded export: {}", forwarder);
+
+    // Parse out the destination DLL and API name
+    let split: Vec<&str> = forwarder.split(".").collect();
+    if split.len() != 2 || split[0].is_empty() || split[1].is_empty() {
+        Err(format!("Invalid forwarder string: {}", forwarder))?
+    }
+    let dest_module_name = split[0];
+    let dest_api_name = split[1];
+
+    // Check new API hash
+    let dest_api_hash: u32 = djb2::djb2_hash(dest_api_name.as_bytes());
+    if discovered_api(&dest_api_hash)? {
+        // We already resolved this API
+        println!("Forwarding dest API {} already discovered - resolved to {}", dest_api_name, get_hashed_api_addr(&dest_api_hash)?);
+        return Ok(());
+    } else if !is_target_api(&dest_api_hash)? {
+        // New API hash
+        add_target_api(&dest_api_hash)?;
+        println!("Adding forwarding dest API {} to target set with hash {}", dest_api_name, dest_api_hash);
+    }
+
+    println!("Processing forwarder module: {}", dest_module_name);
+    let full_dest_module_name = dest_module_name.to_owned() + ".dll";
+    match process_module_eat(&full_dest_module_name) {
+        Ok(_) => {
+            println!("Successfully processed forwarder module {}", dest_module_name);
+            Ok(())
+        },
+        Err(e) => {
+            Err(format!("Failed to process forwarder module {}: {}", dest_module_name, e))?
+        }
     }
 }
 
@@ -262,14 +319,13 @@ fn process_module_eat(module_name: &str) -> Result<(), Box<dyn Error>> {
         let func_name_str = match func_name_cstr.to_str() {
             Ok(s) => s,
             Err(e) => {
-                println!("[ERROR] Failed to convert API name C-string to rust string: {}", e);
-                ""
+                Err(format!("[ERROR] Failed to convert API name C-string to rust string: {}", e))?
             }
         };
 
         // Check DJB2 hash of function name - if the API is one that we want, grab the address
         let hash: u32 = djb2::djb2_hash(func_name_cstr.to_bytes());
-        if TARGET_HASHES.contains(&hash) {
+        if is_target_api(&hash)? {
             // Check if we already resolved this API
             if discovered_api(&hash)? {
                 println!("Already resolved API {} with hash {:#18x}", func_name_str, hash);
@@ -278,11 +334,29 @@ fn process_module_eat(module_name: &str) -> Result<(), Box<dyn Error>> {
 
             // Use the ordinal to get the API address
             let ordinal: u16 = unsafe { *(exported_ordinals_list_ptr.add(i as usize)) };
-            let func_addr_rva: u32 = unsafe { *(exported_func_list_ptr.add(ordinal as usize)) };
+            let func_rva: u32 = unsafe { *(exported_func_list_ptr.add(ordinal as usize)) };
+            let func_addr_val: isize = library_base_addr_val + func_rva as isize;
+            let func_ptr: *const i8 = func_addr_val as *const i8;
 
             #[cfg(debug_assertions)]
-            println!("Found target API {} with hash {:#18x} and RVA {:#18x}", func_name_str, hash, func_addr_rva);
+            println!("Found target API {} with hash {:#18x} and RVA {:#18x}", func_name_str, hash, func_rva);
 
+            // Check if the address is a forwarder, meaning it's within the export directory
+            if func_rva >= export_dir_rva && func_rva < export_dir_rva + export_dir_size {
+                let forwarder_cstr = unsafe { CStr::from_ptr(func_ptr) };
+                let forwarder_str =  match forwarder_cstr.to_str() {
+                    Ok(s) => s,
+                    Err(e) => {
+                        Err(format!("[ERROR] Failed to convert API forwarder C-string to rust string: {}", e))?
+                    }
+                };
+                println!("Found target API {} with hash {:#18x} and forwarder entry {}", func_name_str, hash, forwarder_str);
+
+                // Process the forwarded export
+                process_forwarded_export(&forwarder_str)?
+            } else {
+                // TODO - get address and save it
+            }
         }
     }
 
