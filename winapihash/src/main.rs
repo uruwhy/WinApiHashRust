@@ -24,6 +24,13 @@ use {
 };
 use djb2macro::djb2;
 
+// Macro to get pointer after adding RVA to base address
+macro_rules! ptr_from_rva {
+    ($rva:expr, $base_addr:expr, $t:ty) => {
+        ($base_addr + ($rva as isize)) as *const $t
+    };
+}
+
 // Define return type for GetProcAddress
 // Ref: https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/Foundation/type.FARPROC.html
 pub type FARPROC = unsafe extern "system" fn() -> isize;
@@ -34,6 +41,7 @@ lazy_static::lazy_static! {
         djb2!("Process32FirstW"),
         djb2!("CreateToolhelp32Snapshot"),
         djb2!("HeapAlloc"),
+        djb2!("MessageBoxW"),
     ]));
 
     static ref HASHED_API_ADDRESSES: Mutex<HashMap<u32, u64>> = Mutex::new(HashMap::new());
@@ -184,8 +192,7 @@ fn process_module_eat(module_name: &str) -> Result<(), Box<dyn Error>> {
     }
 
     // Read in NT Headers
-    let nt_headers_addr_val: isize = unsafe { library_base_addr_val + ((*dos_header_ptr).e_lfanew as isize) };
-    let nt_headers_ptr: *const IMAGE_NT_HEADERS64 = nt_headers_addr_val as *const IMAGE_NT_HEADERS64;
+    let nt_headers_ptr: *const IMAGE_NT_HEADERS64 = ptr_from_rva!(unsafe {(*dos_header_ptr).e_lfanew}, library_base_addr_val, IMAGE_NT_HEADERS64);
 
     // Debugging - display NT headers fields
     #[cfg(debug_assertions)]
@@ -276,8 +283,7 @@ fn process_module_eat(module_name: &str) -> Result<(), Box<dyn Error>> {
     }
 
     // Access export directory
-    let export_dir_addr_val: isize = library_base_addr_val + (export_dir_rva as isize);
-    let export_dir_ptr: *const IMAGE_EXPORT_DIRECTORY = export_dir_addr_val as *const IMAGE_EXPORT_DIRECTORY;
+    let export_dir_ptr: *const IMAGE_EXPORT_DIRECTORY = ptr_from_rva!(export_dir_rva, library_base_addr_val, IMAGE_EXPORT_DIRECTORY);
 
     #[cfg(debug_assertions)]
     unsafe {
@@ -291,12 +297,9 @@ fn process_module_eat(module_name: &str) -> Result<(), Box<dyn Error>> {
     }
 
     // Get the exported functions, exported names, and name ordinals.
-    let exported_func_list_addr_val: isize = library_base_addr_val + unsafe { (*export_dir_ptr).AddressOfFunctions as isize };
-    let exported_func_list_ptr: *const u32 = exported_func_list_addr_val as *const u32;
-    let exported_names_list_addr_val: isize = library_base_addr_val + unsafe { (*export_dir_ptr).AddressOfNames as isize };
-    let exported_names_list_ptr: *const u32 = exported_names_list_addr_val as *const u32;
-    let exported_ordinals_list_addr_val: isize = library_base_addr_val + unsafe { (*export_dir_ptr).AddressOfNameOrdinals as isize };
-    let exported_ordinals_list_ptr: *const u16 = exported_ordinals_list_addr_val as *const u16;
+    let exported_func_list_ptr: *const u32 = ptr_from_rva!(unsafe {(*export_dir_ptr).AddressOfFunctions}, library_base_addr_val, u32);
+    let exported_names_list_ptr: *const u32 = ptr_from_rva!(unsafe {(*export_dir_ptr).AddressOfNames}, library_base_addr_val, u32);
+    let exported_ordinals_list_ptr: *const u16 = ptr_from_rva!(unsafe {(*export_dir_ptr).AddressOfNameOrdinals}, library_base_addr_val, u16);
 
     // Iterate through exported function names.
     // Note that we use NumberOfNames since we are only looking at functions
@@ -306,8 +309,7 @@ fn process_module_eat(module_name: &str) -> Result<(), Box<dyn Error>> {
     for i in 0..num_names {
         // Get function name. Each entry of AddressOfNames is an RVA for the exported name
         let func_name_rva: u32 = unsafe { *(exported_names_list_ptr.add(i as usize)) };
-        let func_name_addr_val: isize = library_base_addr_val + func_name_rva as isize;
-        let func_name_ptr: *const i8 = func_name_addr_val as *const i8;
+        let func_name_ptr: *const i8 = ptr_from_rva!(func_name_rva, library_base_addr_val, i8);
         let func_name_cstr = unsafe { CStr::from_ptr(func_name_ptr) };
 
         let func_name_str = match func_name_cstr.to_str() {
@@ -329,8 +331,7 @@ fn process_module_eat(module_name: &str) -> Result<(), Box<dyn Error>> {
             // Use the ordinal to get the API address
             let ordinal: u16 = unsafe { *(exported_ordinals_list_ptr.add(i as usize)) };
             let func_rva: u32 = unsafe { *(exported_func_list_ptr.add(ordinal as usize)) };
-            let func_addr_val: isize = library_base_addr_val + func_rva as isize;
-            let func_ptr: *const i8 = func_addr_val as *const i8;
+            let func_ptr: *const i8 =  ptr_from_rva!(func_rva, library_base_addr_val, i8);
 
             #[cfg(debug_assertions)]
             println!("Found target API {} with hash {:#010x} and RVA 0x{:x}", func_name_str, hash, func_rva);
@@ -350,7 +351,7 @@ fn process_module_eat(module_name: &str) -> Result<(), Box<dyn Error>> {
                 process_forwarded_export(&forwarder_str)?;
             } else {
                 // Save the address
-                let func_addr_to_save: u64 = func_addr_val as u64;
+                let func_addr_to_save: u64 = func_ptr as u64;
                 add_discovered_api(&hash, &func_addr_to_save)?;
                 println!("Resolved target API {} with hash {:#010x} and address 0x{:x}", func_name_str, hash, func_addr_to_save);
             }
@@ -360,6 +361,34 @@ fn process_module_eat(module_name: &str) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+// Returns the function address for the given API hash, using the provided module
+fn resolve_api(hash: u32, module_name: &str) -> Result<u64, Box<dyn Error>> {
+    println!("Resolving API with hash {:x} from module {}", hash, module_name);
+
+    // Check if we already resolved this API
+    if discovered_api(&hash)? {
+        #[cfg(debug_assertions)]
+        println!("Returning pre-resolved address");
+        return Ok(get_hashed_api_addr(&hash)?);
+    }
+
+    // Process module and get resolved API address
+    match process_module_eat(module_name) {
+        Ok(_) => {
+            if discovered_api(&hash)? {
+                #[cfg(debug_assertions)]
+                println!("Returning pre-resolved address");
+                Ok(get_hashed_api_addr(&hash)?)
+            } else {
+                Err(format!("Failed to resolve hash {:x} after processing module {}", hash, module_name))?
+            }
+        },
+        Err(e) => {
+            Err(format!("Failed to process module {}: {}", module_name, e))?
+        }
+    }
+}
+
 
 fn main() {
     #[cfg(debug_assertions)] {
@@ -367,5 +396,7 @@ fn main() {
         print_target_hashes();
     }
 
-    process_module_eat("kernel32.dll").unwrap();
+    // process_module_eat("kernel32.dll").unwrap();
+    let message_box_w_ptr = resolve_api(djb2!("MessageBoxW"), "User32.dll").unwrap() as *const ();
+    println!("MessageBoxW ")
 }
