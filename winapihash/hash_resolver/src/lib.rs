@@ -4,6 +4,7 @@ use std::collections::{HashSet, HashMap};
 use std::error::Error;
 use std::ffi::CStr;
 use std::sync::Mutex;
+use windows::core::PCWSTR;
 use windows::Win32::{
     Foundation::{HMODULE, FreeLibrary},
     System::{
@@ -22,12 +23,21 @@ use windows::Win32::{
     },
 };
 use djb2macro::djb2;
-use crate::util::to_wstring;
 
 // Macro to get pointer after adding RVA to base address.
+#[macro_export]
 macro_rules! ptr_from_rva {
     ($rva:expr, $base_addr:expr, $t:ty) => {
         ($base_addr + ($rva as isize)) as *const $t
+    };
+}
+
+// Macro to convert address to function pointer.
+// Reference: https://stackoverflow.com/a/46134764, https://doc.rust-lang.org/stable/std/mem/fn.transmute.html
+#[macro_export]
+macro_rules! addr_to_func_ptr {
+    ($addr:expr, $t:ty) => {
+        unsafe { ::std::mem::transmute::<*const (), $t>($addr as *const ()) }
     };
 }
 
@@ -36,16 +46,14 @@ lazy_static::lazy_static! {
     static ref TARGET_HASHES: Mutex<HashSet<u32>> = Mutex::new(
         HashSet::from([
             djb2!("Process32FirstW"),
-            djb2!("CreateToolhelp32Snapshot"),
-            djb2!("HeapAlloc"),
-            djb2!("MessageBoxW"),
+                      djb2!("CreateToolhelp32Snapshot"),
+                      djb2!("HeapAlloc"),
+                      djb2!("MessageBoxW"),
         ])
     );
 
     static ref HASHED_API_ADDRESSES: Mutex<HashMap<u32, u64>> = Mutex::new(HashMap::new());
 }
-
-
 
 fn release_hmodule(h_module: &HMODULE) {
     match unsafe { FreeLibrary(*h_module) } {
@@ -54,6 +62,10 @@ fn release_hmodule(h_module: &HMODULE) {
             println!("FreeLibrary failed: {}", e);
         }
     }
+}
+
+fn to_wstring(value: &str) -> Vec<u16> {
+    return value.encode_utf16().chain([0u16]).collect::<Vec<u16>>();
 }
 
 // Process forwarded export. Will check if the forwarded export API hash is not yet part of the target set.
@@ -273,6 +285,7 @@ fn process_module_eat(module_name: &str) -> Result<(), Box<dyn Error>> {
         let func_name_str = match func_name_cstr.to_str() {
             Ok(s) => s,
             Err(e) => {
+                release_hmodule(&h_module);
                 Err(format!("[ERROR] Failed to convert API name C-string to rust string: {}", e))?
             }
         };
@@ -300,6 +313,7 @@ fn process_module_eat(module_name: &str) -> Result<(), Box<dyn Error>> {
                 let forwarder_str =  match forwarder_cstr.to_str() {
                     Ok(s) => s,
                     Err(e) => {
+                        release_hmodule(&h_module);
                         Err(format!("[ERROR] Failed to convert API forwarder C-string to rust string: {}", e))?
                     }
                 };
@@ -316,6 +330,7 @@ fn process_module_eat(module_name: &str) -> Result<(), Box<dyn Error>> {
         }
     }
 
+    release_hmodule(&h_module);
     Ok(())
 }
 

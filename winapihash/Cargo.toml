@@ -6,29 +6,12 @@ edition = "2021"
 [dependencies]
 djb2 = { path = "djb2" }
 djb2macro = { path = "djb2macro" }
-lazy_static = "1.5.0"
+hash_resolver = { path = "hash_resolver" }
+cfg-if = "1.0.0"
 
 # For Windows API
 [target.'cfg(windows)'.dependencies.windows]
 version = "0.57.0"
 features = [
     "Win32_Foundation",
-    "Win32_System",
-    "Win32_System_Diagnostics",
-    "Win32_System_Diagnostics_Debug",
-    "Win32_System_LibraryLoader",
-    "Win32_System_SystemInformation",
-    "Win32_System_SystemServices",
-]
-
-[target.'cfg(windows)'.dependencies.windows-sys]
-version = "0.52.0"
-features = [
-    "Win32_Foundation",
-    "Win32_System",
-    "Win32_System_Diagnostics",
-    "Win32_System_Diagnostics_Debug",
-    "Win32_System_LibraryLoader",
-    "Win32_System_SystemInformation",
-    "Win32_System_SystemServices",
 ]
