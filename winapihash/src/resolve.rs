@@ -4,9 +4,9 @@ use std::collections::{HashSet, HashMap};
 use std::error::Error;
 use std::ffi::CStr;
 use std::sync::Mutex;
-use {
-    windows::Win32::Foundation::{HMODULE, FreeLibrary},
-    windows::Win32::System::{
+use windows::Win32::{
+    Foundation::{HMODULE, FreeLibrary},
+    System::{
         LibraryLoader::LoadLibraryW,
         SystemServices::{
             IMAGE_DOS_HEADER,

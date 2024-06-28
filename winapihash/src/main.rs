@@ -5,15 +5,7 @@ mod util;
 
 use std::ffi::c_void;
 use djb2macro::djb2;
-use crate::util::to_wstring;
-
-// Macro to convert address to function pointer.
-// Reference: https://stackoverflow.com/a/46134764, https://doc.rust-lang.org/stable/std/mem/fn.transmute.html
-macro_rules! addr_to_func_ptr {
-    ($addr:expr, $t:ty) => {
-        unsafe { ::std::mem::transmute::<*const (), $t>($addr as *const ()) }
-    };
-}
+use crate::util::*;
 
 // HWND -> HANDLE -> void *
 // LPCWSTR -> *const u16
