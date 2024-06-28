@@ -4,6 +4,7 @@ mod resolve;
 mod util;
 
 use std::ffi::c_void;
+use windows::core::PCWSTR;
 use djb2macro::djb2;
 use crate::util::*;
 
@@ -24,6 +25,14 @@ fn main() {
     let message_box_w_ptr: FnMessageBoxW = addr_to_func_ptr!(resolve::resolve_api(djb2!("MessageBoxW"), "User32.dll").unwrap(), FnMessageBoxW);
 
     // Call MessageBoxW
-    let ret: i32 = message_box_w_ptr(0 as *mut c_void, to_wstring("Test msg").as_ptr(), to_wstring("Test title").as_ptr(), MB_OK);
+    let message_str_w = to_wstring("Test msg");
+    let title_str_w = to_wstring("Test title");
+    let ret: i32 = message_box_w_ptr(0 as *mut c_void, message_str_w.as_ptr(), title_str_w.as_ptr(), MB_OK);
     println!("Return value: {}", ret);
+
+    println!("The current directory is {}", std::env::current_dir().unwrap().display());
+    let path_w = to_wstring("C:\\Users\\User\\Documents\\WinApiHashRust\\winapihash\\dll_to_inject\\target\\release\\toinject.dll");
+    unsafe {
+        let ret = windows::Win32::System::LibraryLoader::LoadLibraryW(PCWSTR::from_raw(path_w.as_ptr())).unwrap();
+    };
 }

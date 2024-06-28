@@ -103,7 +103,7 @@ fn process_module_eat(module_name: &str) -> Result<(), Box<dyn Error>> {
 
     // Get module handle
     let module_name_w = to_wstring(module_name);
-    let h_module: HMODULE = unsafe { LoadLibraryW(module_name_w)? };
+    let h_module: HMODULE = unsafe { LoadLibraryW(PCWSTR::from_raw(module_name_w.as_ptr()))? };
     if h_module.is_invalid() {
         Err("LoadLibraryW returned invalid HMODULE.")?
     }

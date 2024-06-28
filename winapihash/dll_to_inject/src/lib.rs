@@ -19,18 +19,19 @@ extern "system" fn DllMain(h_inst_dll: HINSTANCE, reason: u32, _: *mut ()) -> bo
 }
 
 fn spawn_message() {
+    let message_str_w = to_wstring("Injected msg");
+    let title_str_w = to_wstring("Injected DLL");
+
     unsafe {
         MessageBoxW(
             HWND(0),
-            to_wstring("Injected message"),
-            to_wstring("Injected DLL"),
+            PCWSTR::from_raw(message_str_w.as_ptr()),
+            PCWSTR::from_raw(title_str_w.as_ptr()),
             MB_OK,
         );
     }
 }
 
-fn to_wstring(value: &str) -> PCWSTR {
-    let mut encoded = value.encode_utf16().collect::<Vec<_>>();
-    encoded.push(0);
-    PCWSTR::from_raw(encoded.as_ptr())
+pub fn to_wstring(value: &str) -> Vec<u16> {
+    return value.encode_utf16().chain([0u16]).collect::<Vec<u16>>();
 }
