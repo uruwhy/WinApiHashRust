@@ -377,6 +377,7 @@ pub fn get_hashed_api_addr(hash: &u32) -> Result<u64, Box<dyn Error>> {
 
 // Returns the function address for the given API hash, using the provided module
 pub fn resolve_api(hash: u32, module_name: &str) -> Result<u64, Box<dyn Error>> {
+    #[cfg(debug_assertions)]
     println!("Resolving API with hash {:x} from module {}", hash, module_name);
 
     // Check if we already resolved this API

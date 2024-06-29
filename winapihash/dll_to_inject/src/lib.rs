@@ -1,7 +1,7 @@
 // Reference: https://samrambles.com/guides/window-hacking-with-rust/creating-a-dll-with-rust/index.html
 use windows::{
     Win32::Foundation::{HINSTANCE, HWND},
-    Win32::System::SystemServices::{DLL_PROCESS_ATTACH, DLL_THREAD_ATTACH},
+    Win32::System::SystemServices::DLL_PROCESS_ATTACH,
     Win32::UI::WindowsAndMessaging::{MessageBoxW, MB_OK},
     core::PCWSTR,
 };
@@ -11,7 +11,7 @@ use windows::{
 #[allow(non_snake_case, unused_variables)]
 extern "system" fn DllMain(h_inst_dll: HINSTANCE, reason: u32, _: *mut ()) -> bool {
     match reason {
-        DLL_PROCESS_ATTACH | DLL_THREAD_ATTACH => spawn_message(),
+        DLL_PROCESS_ATTACH => spawn_message(),
         _ => (),
     }
 

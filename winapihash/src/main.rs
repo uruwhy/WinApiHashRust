@@ -22,6 +22,42 @@ type FnMessageBoxW = fn(*mut c_void, *const u16, *const u16, u32) -> i32;
 const MB_OK: u32 = 0x00000000;
 
 fn main() {
+    std::process::exit(perform_poc());
+}
+
+fn perform_poc() -> i32 {
+    let args: Vec<String> = std::env::args().collect();
+    if args.len() != 3 {
+        println!("Usage: {} [target PID] [DLL path]", &args[0]);
+        return 1;
+    }
+    let target_pid_str = &args[1];
+    let dll_path = &args[2];
+
+    let target_pid = match target_pid_str.parse::<u32>() {
+        Ok(p) => p,
+        Err(_) => {
+            println!("Invalid PID: {}", target_pid_str);
+            return 2;
+        }
+    };
+    let full_dll_path: String = match std::path::absolute(dll_path) {
+        Ok(full_path) => {
+            let path_os_str = full_path.into_os_string();
+            match path_os_str.into_string() {
+                Ok(p) => p,
+                Err(_) => {
+                    println!("Failed to convert full DLL path OS string to rust string.");
+                    return 3;
+                }
+            }
+        },
+        Err(e) => {
+            println!("Failed to get full path to DLL: {}", e);
+            return 3;
+        }
+    };
+
     #[cfg(debug_assertions)] {
         println!("Printing target hashes:");
         print_target_hashes();
@@ -36,9 +72,22 @@ fn main() {
         println!("MessageBoxW return value: {}", ret);
     }
 
-    println!("The current directory is {}", std::env::current_dir().unwrap().display());
-    /*let path_w = to_wstring("C:\\Users\\User\\Documents\\WinApiHashRust\\winapihash\\dll_to_inject\\target\\release\\toinject.dll");
     unsafe {
+        println!("Injecting {} into process ID {}", full_dll_path, target_pid);
+        match inject::classic_dll_injection(target_pid, &full_dll_path) {
+            Ok(_) => {
+                println!("Successfully performed DLL injection.");
+            },
+            Err(e) => {
+                println!("DLL injection failed: {}", e);
+                return 4;
+            }
+        }
+    }
+    /*let path_w = to_wstring("C:\\Users\\User\\Documents\\WinApiHashRust\\winapihash\\dll_to_inject\\target\\release\\toinject.dll");
+        unsafe {
         windows::Win32::System::LibraryLoader::LoadLibraryW(PCWSTR::from_raw(path_w.as_ptr())).unwrap();
     };*/
+
+    return 0;
 }
