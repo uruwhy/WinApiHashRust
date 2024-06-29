@@ -1,5 +1,5 @@
-# WinApiHashRust
-Windows API hashing POC in Rust. Uses Windows API hashing to hide certain Windows API calls from the compiled binary's IAT.
+# Windows API Hashing In Rust
+Windows API hashing PoC in Rust. Uses Windows API hashing to hide certain Windows API calls from the compiled binary's IAT.
 
 Uses classic DLL injection to demonstrate API hashing and dynamic API resolution at run-time.
 
