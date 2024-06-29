@@ -3,14 +3,21 @@
 // References:
 //      https://samrambles.com/guides/window-hacking-with-rust/creating-a-dll-with-rust/index.html
 //      https://github.com/stephenfewer/ReflectiveDLLInjection
+//      https://github.com/memN0ps/venom-rs/blob/main/reflective_loader/src/lib.rs
 use windows::{
     Win32::Foundation::{HINSTANCE, HWND},
     Win32::System::SystemServices::{DLL_PROCESS_ATTACH, DLL_THREAD_ATTACH},
     Win32::UI::WindowsAndMessaging::{MessageBoxW, MB_OK},
     core::PCWSTR,
 };
+use hash_resolver::*;
+use djb2macro::djb2;
 
 let mut HINSTANCE h_app_instance = HINSTANCE(0);
+
+#[cfg(not(test))]
+#[panic_handler]
+fn panic(_info: &core::panic::PanicInfo) -> ! { loop {} }
 
 // https://stackoverflow.com/questions/54999851/how-do-i-get-the-return-address-of-a-function
 extern {
@@ -25,7 +32,7 @@ extern {
 #[no_mangle]
 #[allow(non_snake_case, unused_variables)]
 #[link_section = ".text"]
-extern "system" fn RefLoader(lp_parameter: *mut ()) -> *const u8 {
+pub unsafe extern "system" fn RefLoader(lp_parameter: *mut ()) -> *const u8 {
     let ui_library_addr: *mut u8 = unsafe {return_address(0)};
 }
 
