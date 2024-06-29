@@ -8,6 +8,9 @@ Additional notes/features:
 - Hash and API resolution functionality broken out into separate libraries for easy reuse in other projects
 - Provides stub DLL for injection
 
+## Components
+TODO
+
 ## References
 - [Windows API Hashing in Malware](https://www.ired.team/offensive-security/defense-evasion/windows-api-hashing-in-malware)
 - [PE Internals Part 1: A few words about Export Address Table (EAT)](https://ferreirasc.github.io/PE-Export-Address-Table/)
