@@ -84,10 +84,6 @@ fn perform_poc() -> i32 {
             }
         }
     }
-    /*let path_w = to_wstring("C:\\Users\\User\\Documents\\WinApiHashRust\\winapihash\\dll_to_inject\\target\\release\\toinject.dll");
-        unsafe {
-        windows::Win32::System::LibraryLoader::LoadLibraryW(PCWSTR::from_raw(path_w.as_ptr())).unwrap();
-    };*/
 
     return 0;
 }
