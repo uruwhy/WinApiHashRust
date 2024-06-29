@@ -14,4 +14,5 @@ cfg-if = "1.0.0"
 version = "0.57.0"
 features = [
     "Win32_Foundation",
+    "Win32_Security",
 ]
