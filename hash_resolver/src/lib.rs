@@ -22,7 +22,6 @@ use windows::Win32::{
         },
     },
 };
-use djb2macro::djb2;
 
 // Macro to get pointer after adding RVA to base address.
 #[macro_export]
@@ -43,17 +42,7 @@ macro_rules! addr_to_func_ptr {
 
 // APIs that we want to hash
 lazy_static::lazy_static! {
-    static ref TARGET_HASHES: Mutex<HashSet<u32>> = Mutex::new(
-        HashSet::from([
-            djb2!("OpenProcess"),
-            djb2!("VirtualAllocEx"),
-            djb2!("LoadLibraryW"),
-            djb2!("WriteProcessMemory"),
-            djb2!("CreateRemoteThread"),
-            djb2!("MessageBoxW"),
-            djb2!("CloseHandle"),
-        ])
-    );
+    static ref TARGET_HASHES: Mutex<HashSet<u32>> = Mutex::new(HashSet::new());
 
     static ref HASHED_API_ADDRESSES: Mutex<HashMap<u32, u64>> = Mutex::new(HashMap::new());
 }
@@ -352,6 +341,12 @@ pub fn resolved_api(hash: &u32) -> Result<bool, Box<dyn Error>> {
 // Checks if the given API hash belongs to an API that we are hashing
 pub fn is_target_api(hash: &u32) -> Result<bool, Box<dyn Error>> {
     Ok(TARGET_HASHES.lock()?.contains(hash))
+}
+
+// Set initial target APIs
+pub fn set_initial_target_apis(target_apis: &[u32]) -> Result<(), Box<dyn Error>> {
+    TARGET_HASHES.lock()?.extend(target_apis);
+    Ok(())
 }
 
 // Adds a new API as a target (e.g. when processing forwarded exports and the forwarded API name is different)
