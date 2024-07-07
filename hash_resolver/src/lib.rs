@@ -334,7 +334,6 @@ fn process_module_eat(module_name: &str) -> Result<(), Box<dyn Error>> {
         }
     }
 
-    release_hmodule(&h_module);
     Ok(())
 }
 
