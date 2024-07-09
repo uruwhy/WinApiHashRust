@@ -53,6 +53,8 @@ println!("MessageBoxW return value: {}", ret);
 ```
 
 ## Roadmap
+- [ ] allow user to resolve an API that is outside of the initial set of target APIs
+- [ ] check PEB to see if the requested module has already been loaded to avoid calling `LoadLibraryW` unnecessarily
 - [ ] cache modules to avoid having to reload them in case of future lookups outside of initial scope
 - [ ] XOR-crypt the addresses when storing them in memory and prior to using them
 
